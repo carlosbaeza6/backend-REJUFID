@@ -79,3 +79,4 @@ cdi.rejufid.infrastructure/obj/
 *.vsconfig
 .vscode/
 >>>>>>> main
+cdi.rejufid.bd/cdi.rejufid.bd.dbmdl

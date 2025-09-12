@@ -1,0 +1,4 @@
+CREATE TABLE Organos (
+    Id_organo INT IDENTITY(1,1) PRIMARY KEY,
+    Organo VARCHAR(200) NOT NULL
+);

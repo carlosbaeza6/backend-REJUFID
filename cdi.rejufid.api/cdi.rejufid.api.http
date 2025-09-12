@@ -1,0 +1,6 @@
+@cdi.rejufid.api_HostAddress = http://localhost:5269
+
+GET {{cdi.rejufid.api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,0 +1,4 @@
+CREATE TABLE Materias (
+    Id_materia INT IDENTITY(1,1) PRIMARY KEY,
+    Materias VARCHAR(100) NOT NULL
+);

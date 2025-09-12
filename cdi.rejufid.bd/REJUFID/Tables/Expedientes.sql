@@ -1,0 +1,21 @@
+CREATE TABLE Expedientes (
+    Id_expediente INT IDENTITY(1,1) PRIMARY KEY,
+    Id_estado INT,
+    Id_tipo_organo INT,
+    Id_materia INT,
+    Id_organo INT,
+    Id_tipo_asunto INT,
+    Numero_expediente VARCHAR(50),
+    Anio_expediente INT,
+    Fecha_expediente DATE,
+    Observacion TEXT,
+    Id_estatus INT,
+    Usuario_registro VARCHAR(100),
+    Fecha_registro DATETIME DEFAULT GETDATE(),
+    FOREIGN KEY (Id_estado) REFERENCES Estados(Id_estado),
+    FOREIGN KEY (Id_tipo_organo) REFERENCES Tipo_organo(Id_tipo_organo),
+    FOREIGN KEY (Id_materia) REFERENCES Materias(Id_materia),
+    FOREIGN KEY (Id_organo) REFERENCES Organos(Id_organo),
+    FOREIGN KEY (Id_tipo_asunto) REFERENCES Tipo_asunto(Id_tipo_asunto),
+    FOREIGN KEY (Id_estatus) REFERENCES Estatus(Id_estatus)
+);

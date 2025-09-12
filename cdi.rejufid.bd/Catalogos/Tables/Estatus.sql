@@ -1,0 +1,4 @@
+CREATE TABLE Estatus (
+    Id_estatus INT IDENTITY(1,1) PRIMARY KEY,
+    Estatus VARCHAR(50) NOT NULL
+);

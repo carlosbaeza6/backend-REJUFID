@@ -1,0 +1,4 @@
+CREATE TABLE Estados (
+    Id_estado INT IDENTITY(1,1) PRIMARY KEY,
+    Estados VARCHAR(100) NOT NULL
+);

@@ -20,6 +20,8 @@ namespace cdi.rejufid.infrastructure.Mappings
             CreateMap<TipoAsuntoEntity, TipoAsuntoDTO>().ReverseMap();
             CreateMap<TipoOrganoEntity, TipoOrganoDTO>().ReverseMap();
             CreateMap<TipoArchivoEntity, TipoArchivoDTO>().ReverseMap();
+            CreateMap<DocumentoEntity, DocumentoRespuestaDTO>();
+            CreateMap<UsuarioRolEntity, UsuarioRolDTO>().ReverseMap();
 
 
         }

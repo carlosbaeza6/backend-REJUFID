@@ -1,8 +1,14 @@
-﻿using Microsoft.Extensions.FileProviders;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.IdentityModel.Tokens;
 using System.Reflection;
+using System.Text;
+
 using cdi.rejufid.infrastructure.Extensions;
 using cdi.rejufid.infrastructure.Mappings;
+using cdi.rejufid.core.Helpers;
 
 namespace cdi.rejufid.api
 {
@@ -30,6 +36,12 @@ namespace cdi.rejufid.api
                         .SetIsOriginAllowed(_ => true));
             });
 
+            // LÍMITE DE MULTIPART BODY 
+            services.Configure<FormOptions>(options =>
+            {
+                options.MultipartBodyLengthLimit = 100 * 1024 * 1024; // 100 MB
+            });
+
             // Conexión a la Base de Datos 
             services.AddDbContext(Configuration)
                     .AddFilters()
@@ -38,8 +50,35 @@ namespace cdi.rejufid.api
             // AutoMapper
             services.AddAutoMapper(typeof(AutoMapperProfile));
 
-            // Autorización
-            services.AddAuthorization(Configuration);
+            // JWT 
+            services.Configure<JwtSettings>(Configuration.GetSection("JwtSettings"));
+            var jwt = Configuration.GetSection("JwtSettings").Get<JwtSettings>();
+            var key = Encoding.UTF8.GetBytes(jwt.SecretKey);
+
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(options =>
+            {
+                options.RequireHttpsMetadata = false; 
+                options.SaveToken = true;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = jwt.Issuer,
+                    ValidAudience = jwt.Audience,
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ClockSkew = TimeSpan.Zero
+                };
+            });
+
+            // Autorización (sin pasar Configuration)
+            services.AddAuthorization();
 
             // CONFIGURACIÓN DE SWAGGER
             services.AddSwaggerGen(options =>
@@ -100,7 +139,7 @@ namespace cdi.rejufid.api
             app.UseHttpsRedirection();
             app.UseCors("CorsPolicy");
             app.UseRouting();
-            app.UseAuthentication();
+            app.UseAuthentication();     
             app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>
@@ -124,4 +163,3 @@ namespace cdi.rejufid.api
         }
     }
 }
-

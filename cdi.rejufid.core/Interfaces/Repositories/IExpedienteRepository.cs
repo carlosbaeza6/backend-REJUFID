@@ -7,16 +7,17 @@ namespace cdi.rejufid.core.Interfaces.Repositories
     {
         Task<IEnumerable<ExpedienteEntity>> GetAllAsync();
         Task<ExpedienteEntity> GetByIdAsync(int id);
-        Task<int> AddAsync(ExpedienteEntity expediente);
-        Task<bool> UpdateAsync(ExpedienteEntity expediente);
+        Task<int> CreateAsync(ExpedienteEntity expediente);
         Task<bool> DeleteAsync(int id);
-        Task<IEnumerable<ExpedienteDetalleDTO>> FiltrarUltimos100Async();
-        Task<IEnumerable<ExpedienteDetalleDTO>> FiltrarDetallesAsync(
-            DateTime? fechaDesde,
-            DateTime? fechaHasta,
-            string? materia,
-            string? estado,
+        Task<(bool Existed, List<string> RutasRelativas)> DeleteDeepAsync(
+            int idExpediente,
+            CancellationToken ct = default
+        );
+        Task<IEnumerable<ExpedienteDetalleDTO>> GetLast100Async();
+        Task<IEnumerable<ExpedienteDetalleDTO>> GetFilteredAsync(
             string? tipoOrgano,
+            string? organo,
+            string? materia,
             string? palabraClave);
     }
 }

@@ -13,6 +13,9 @@ namespace cdi.rejufid.core.Interfaces
         ITipoAsuntoRepository TipoAsunto { get; }
         ITipoOrganoRepository TipoOrgano { get; }
         ITipoArchivoRepository TipoArchivo { get; }
+        IDocumentoRepository Documentos { get; }
+        IUsuarioRolRepository UsuariosRoles { get; }
+
 
 
     }

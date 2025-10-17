@@ -1,4 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Hosting;
 using cdi.rejufid.core.DTOs;
 using cdi.rejufid.core.Interfaces.Services;
 
@@ -9,10 +14,12 @@ namespace cdi.rejufid.api.Controllers
     public class ExpedientesController : ControllerBase
     {
         private readonly IExpedienteService _expedienteService;
+        private readonly IWebHostEnvironment _env;
 
-        public ExpedientesController(IExpedienteService expedienteService)
+        public ExpedientesController(IExpedienteService expedienteService, IWebHostEnvironment env)
         {
             _expedienteService = expedienteService;
+            _env = env;
         }
 
         // GET: /Expedientes
@@ -23,31 +30,29 @@ namespace cdi.rejufid.api.Controllers
             return Ok(lista);
         }
 
-        // GET: /Expedientes/consulta
-        [HttpGet("consulta")]
+        // GET: /Expedientes/Filtros
+        [HttpGet("Filtros")]
         public async Task<ActionResult<IEnumerable<ExpedienteDetalleDTO>>> GetFiltered(
-            [FromQuery] DateTime? fechaDesde,
-            [FromQuery] DateTime? fechaHasta,
-            [FromQuery] string? materia,
-            [FromQuery] string? estado,
             [FromQuery] string? tipoOrgano,
+            [FromQuery] string? organo,
+            [FromQuery] string? materia,
             [FromQuery] string? palabraClave)
         {
-            var hayFiltros = fechaDesde.HasValue || fechaHasta.HasValue ||
-                             !string.IsNullOrWhiteSpace(materia) ||
-                             !string.IsNullOrWhiteSpace(estado) ||
-                             !string.IsNullOrWhiteSpace(tipoOrgano) ||
-                             !string.IsNullOrWhiteSpace(palabraClave);
+            var hayFiltros =
+                !string.IsNullOrWhiteSpace(tipoOrgano) ||
+                !string.IsNullOrWhiteSpace(organo) ||
+                !string.IsNullOrWhiteSpace(materia) ||
+                !string.IsNullOrWhiteSpace(palabraClave);
 
             var lista = hayFiltros
-                ? await _expedienteService.GetFilteredAsync(fechaDesde, fechaHasta, materia, estado, tipoOrgano, palabraClave)
-                : await _expedienteService.GetUltimos100Async();
+                ? await _expedienteService.GetFilteredAsync(tipoOrgano, organo, materia, palabraClave)
+                : await _expedienteService.GetLast100Async();
 
             return Ok(lista);
         }
 
         // GET: /Expedientes/5
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         public async Task<ActionResult<ExpedienteDTO>> GetById(int id)
         {
             var dto = await _expedienteService.GetByIdAsync(id);
@@ -59,7 +64,7 @@ namespace cdi.rejufid.api.Controllers
 
         // POST: /Expedientes
         [HttpPost]
-        public async Task<ActionResult<ExpedienteDTO>> Create(ExpedienteDTO dto)
+        public async Task<ActionResult<ExpedienteDTO>> Create([FromBody] ExpedienteDTO dto)
         {
             var newId = await _expedienteService.CreateAsync(dto);
             dto.Id_expediente = newId;
@@ -67,29 +72,25 @@ namespace cdi.rejufid.api.Controllers
             return CreatedAtAction(nameof(GetById), new { id = newId }, dto);
         }
 
-        // PUT: /Expedientes/5
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, ExpedienteDTO dto)
-        {
-            if (id != dto.Id_expediente)
-                return BadRequest("El ID no coincide");
-
-            var updated = await _expedienteService.UpdateAsync(id, dto);
-            if (!updated)
-                return NotFound();
-
-            return NoContent();
-        }
-
         // DELETE: /Expedientes/5
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var deleted = await _expedienteService.DeleteAsync(id);
-            if (!deleted)
-                return NotFound();
+            try
+            {
+                var baseUploads = Path.Combine(_env.ContentRootPath, "Archivos");
 
-            return NoContent();
+                var deleted = await _expedienteService.DeleteDeepAsync(id, baseUploads);
+                if (!deleted)
+                    return NotFound();
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error al eliminar expediente con id {id}: {ex.Message}");
+                return StatusCode(500, "Error interno al eliminar el expediente.");
+            }
         }
     }
 }

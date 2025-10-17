@@ -7,16 +7,13 @@ namespace cdi.rejufid.core.Interfaces.Services
         Task<IEnumerable<ExpedienteDTO>> GetAllAsync();
         Task<ExpedienteDTO> GetByIdAsync(int id);
         Task<int> CreateAsync(ExpedienteDTO dto);
-        Task<bool> UpdateAsync(int id, ExpedienteDTO dto);
         Task<bool> DeleteAsync(int id);
-
+        Task<bool> DeleteDeepAsync(int idExpediente, string baseUploadsAbsolutePath, CancellationToken ct = default);
         Task<IEnumerable<ExpedienteDetalleDTO>> GetFilteredAsync(
-            DateTime? fechaDesde,
-            DateTime? fechaHasta,
-            string? materia,
-            string? estado,
             string? tipoOrgano,
+            string? organo,
+            string? materia,
             string? palabraClave);
-        Task<IEnumerable<ExpedienteDetalleDTO>> GetUltimos100Async();
+        Task<IEnumerable<ExpedienteDetalleDTO>> GetLast100Async();
     }
 }

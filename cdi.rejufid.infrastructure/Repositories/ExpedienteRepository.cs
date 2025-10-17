@@ -1,9 +1,13 @@
+using System;
+using System.Collections.Generic;
 using System.Data;
-using cdi.rejufid.core.Entities;
-using cdi.rejufid.core.DTOs;
-using cdi.rejufid.core.Interfaces.Repositories;
-using cdi.core;
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
+using cdi.core;
+using cdi.rejufid.core.DTOs;
+using cdi.rejufid.core.Entities;
+using cdi.rejufid.core.Interfaces.Repositories;
 
 namespace cdi.rejufid.infrastructure.Repositories
 {
@@ -48,7 +52,7 @@ namespace cdi.rejufid.infrastructure.Repositories
             return lista;
         }
 
-        public async Task<ExpedienteEntity> GetByIdAsync(int id)
+        public async Task<ExpedienteEntity?> GetByIdAsync(int id)
         {
             using var connection = (DbConnection)_connectionFactory.CreateDbConnection(DBConnectionsNames.REJUFIDDB);
             await connection.OpenAsync();
@@ -83,12 +87,35 @@ namespace cdi.rejufid.infrastructure.Repositories
             return null;
         }
 
-        public async Task<int> AddAsync(ExpedienteEntity expediente)
+        public async Task<int> CreateAsync(ExpedienteEntity expediente)
         {
             using var connection = (DbConnection)_connectionFactory.CreateDbConnection(DBConnectionsNames.REJUFIDDB);
             await connection.OpenAsync();
 
-            using var command = (DbCommand)connection.CreateCommand();
+            // Validar duplicado (Numero_expediente + Id_organo)
+            using (var checkCommand = connection.CreateCommand())
+            {
+                checkCommand.CommandText = @"
+                    SELECT COUNT(*) 
+                    FROM Expedientes 
+                    WHERE Numero_expediente = @Numero_expediente AND Id_organo = @Id_organo";
+
+                var p1 = checkCommand.CreateParameter();
+                p1.ParameterName = "@Numero_expediente";
+                p1.Value = expediente.Numero_expediente;
+                checkCommand.Parameters.Add(p1);
+
+                var p2 = checkCommand.CreateParameter();
+                p2.ParameterName = "@Id_organo";
+                p2.Value = expediente.Id_organo;
+                checkCommand.Parameters.Add(p2);
+
+                var exists = Convert.ToInt32(await checkCommand.ExecuteScalarAsync());
+                if (exists > 0)
+                    throw new InvalidOperationException("Ya existe un expediente con ese número en el órgano seleccionado.");
+            }
+
+            using var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT INTO Expedientes (
                     Id_estado, Id_tipo_organo, Id_materia, Id_organo, Id_tipo_asunto,
@@ -100,40 +127,12 @@ namespace cdi.rejufid.infrastructure.Repositories
                     @Numero_expediente, @Anio_expediente, @Fecha_expediente, @Observacion,
                     @Id_estatus, @Usuario_registro, @Fecha_registro
                 );
-                SELECT SCOPE_IDENTITY();
-            ";
+                SELECT SCOPE_IDENTITY();";
 
             AddParameters(command, expediente);
 
             var result = await command.ExecuteScalarAsync();
             return Convert.ToInt32(result);
-        }
-
-        public async Task<bool> UpdateAsync(ExpedienteEntity expediente)
-        {
-            using var connection = (DbConnection)_connectionFactory.CreateDbConnection(DBConnectionsNames.REJUFIDDB);
-            await connection.OpenAsync();
-            using var command = (DbCommand)connection.CreateCommand();
-            command.CommandText = @"
-                UPDATE Expedientes SET
-                    Id_estado = @Id_estado,
-                    Id_tipo_organo = @Id_tipo_organo,
-                    Id_materia = @Id_materia,
-                    Id_organo = @Id_organo,
-                    Id_tipo_asunto = @Id_tipo_asunto,
-                    Numero_expediente = @Numero_expediente,
-                    Anio_expediente = @Anio_expediente,
-                    Fecha_expediente = @Fecha_expediente,
-                    Observacion = @Observacion,
-                    Id_estatus = @Id_estatus,
-                    Usuario_registro = @Usuario_registro,
-                    Fecha_registro = @Fecha_registro
-                WHERE Id_expediente = @Id_expediente
-            ";
-
-            AddParameters(command, expediente, includeId: true);
-            var rows = await command.ExecuteNonQueryAsync();
-            return rows > 0;
         }
 
         public async Task<bool> DeleteAsync(int id)
@@ -151,7 +150,72 @@ namespace cdi.rejufid.infrastructure.Repositories
             return rows > 0;
         }
 
-        public async Task<IEnumerable<ExpedienteDetalleDTO>> FiltrarUltimos100Async()
+        public async Task<(bool Existed, List<string> RutasRelativas)> DeleteDeepAsync(
+            int idExpediente,
+            CancellationToken ct = default)
+        {
+            var rutas = new List<string>();
+
+            await using var connection = (DbConnection)_connectionFactory.CreateDbConnection(DBConnectionsNames.REJUFIDDB);
+            await connection.OpenAsync(ct);
+            await using var tx = await connection.BeginTransactionAsync(ct);
+
+            try
+            {
+                await using (var cmd = connection.CreateCommand())
+                {
+                    cmd.Transaction = (DbTransaction)tx;
+                    cmd.CommandText = @"
+                        SELECT Ruta_archivo
+                        FROM Documentos
+                        WHERE Id_expediente = @Id";
+                    var p = cmd.CreateParameter(); p.ParameterName = "@Id"; p.Value = idExpediente;
+                    cmd.Parameters.Add(p);
+
+                    await using var reader = await cmd.ExecuteReaderAsync(ct);
+                    while (await reader.ReadAsync(ct))
+                    {
+                        if (!reader.IsDBNull(0))
+                            rutas.Add(reader.GetString(0));
+                    }
+                }
+
+                await using (var cmdDelDocs = connection.CreateCommand())
+                {
+                    cmdDelDocs.Transaction = (DbTransaction)tx;
+                    cmdDelDocs.CommandText = @"DELETE FROM Documentos WHERE Id_expediente = @Id;";
+                    var p = cmdDelDocs.CreateParameter(); p.ParameterName = "@Id"; p.Value = idExpediente;
+                    cmdDelDocs.Parameters.Add(p);
+                    await cmdDelDocs.ExecuteNonQueryAsync(ct);
+                }
+
+                int rowsExp;
+                await using (var cmdDelExp = connection.CreateCommand())
+                {
+                    cmdDelExp.Transaction = (DbTransaction)tx;
+                    cmdDelExp.CommandText = @"DELETE FROM Expedientes WHERE Id_expediente = @Id;";
+                    var p = cmdDelExp.CreateParameter(); p.ParameterName = "@Id"; p.Value = idExpediente;
+                    cmdDelExp.Parameters.Add(p);
+                    rowsExp = await cmdDelExp.ExecuteNonQueryAsync(ct);
+                }
+
+                if (rowsExp == 0)
+                {
+                    await tx.RollbackAsync(ct);
+                    return (false, new List<string>());
+                }
+
+                await tx.CommitAsync(ct);
+                return (true, rutas);
+            }
+            catch
+            {
+                try { await tx.RollbackAsync(ct); } catch { /* noop */ }
+                throw;
+            }
+        }
+
+        public async Task<IEnumerable<ExpedienteDetalleDTO>> GetLast100Async()
         {
             var lista = new List<ExpedienteDetalleDTO>();
             using var connection = (DbConnection)_connectionFactory.CreateDbConnection(DBConnectionsNames.REJUFIDDB);
@@ -182,12 +246,10 @@ namespace cdi.rejufid.infrastructure.Repositories
             return lista;
         }
 
-        public async Task<IEnumerable<ExpedienteDetalleDTO>> FiltrarDetallesAsync(
-            DateTime? fechaDesde,
-            DateTime? fechaHasta,
-            string? materia,
-            string? estado,
+        public async Task<IEnumerable<ExpedienteDetalleDTO>> GetFilteredAsync(
             string? tipoOrgano,
+            string? organo,
+            string? materia,
             string? palabraClave)
         {
             var lista = new List<ExpedienteDetalleDTO>();
@@ -219,31 +281,24 @@ namespace cdi.rejufid.infrastructure.Repositories
                 command.Parameters.Add(p);
             }
 
-            if (fechaDesde.HasValue)
-            {
-                sql += " AND e.Fecha_expediente >= @fechaDesde";
-                AddParam("@fechaDesde", fechaDesde.Value);
-            }
-            if (fechaHasta.HasValue)
-            {
-                sql += " AND e.Fecha_expediente <= @fechaHasta";
-                AddParam("@fechaHasta", fechaHasta.Value);
-            }
-            if (!string.IsNullOrWhiteSpace(materia))
-            {
-                sql += " AND m.Materias = @materia";
-                AddParam("@materia", materia);
-            }
-            if (!string.IsNullOrWhiteSpace(estado))
-            {
-                sql += " AND est.Estados = @estado";
-                AddParam("@estado", estado);
-            }
             if (!string.IsNullOrWhiteSpace(tipoOrgano))
             {
                 sql += " AND to2.Tipo_organo = @tipoOrgano";
                 AddParam("@tipoOrgano", tipoOrgano);
             }
+
+            if (!string.IsNullOrWhiteSpace(organo))
+            {
+                sql += " AND o.Organo = @organo";
+                AddParam("@organo", organo);
+            }
+
+            if (!string.IsNullOrWhiteSpace(materia))
+            {
+                sql += " AND m.Materias = @materia";
+                AddParam("@materia", materia);
+            }
+
             if (!string.IsNullOrWhiteSpace(palabraClave))
             {
                 sql += " AND (e.Numero_expediente LIKE '%' + @palabraClave + '%' OR e.Observacion LIKE '%' + @palabraClave + '%')";

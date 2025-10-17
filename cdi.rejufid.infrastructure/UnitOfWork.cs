@@ -3,12 +3,12 @@ using cdi.core;
 using cdi.rejufid.core.Interfaces;
 using cdi.rejufid.core.Interfaces.Repositories;
 using cdi.rejufid.infrastructure.Repositories;
-using DocumentFormat.OpenXml.InkML;
 
 namespace cdi.rejufid.infrastructure
 {
     public class UnitOfWork : IUnitOfWork, IDisposable
     {
+        private readonly IDbConnectionFactory context;
 
         private IExpedienteRepository expedienteRepository;
         private IEstadoRepository estadoRepository;
@@ -16,11 +16,12 @@ namespace cdi.rejufid.infrastructure
         private IMateriaRepository materiaRepository;
         private IOrganoRepository organoRepository;
         private IRoleRepository roleRepository;
+        private IUsuarioRolRepository usuarioRolRepository;  
         private ITipoAsuntoRepository tipoAsuntoRepository;
         private ITipoOrganoRepository tipoOrganoRepository;
         private ITipoArchivoRepository tipoArchivoRepository;
+        private IDocumentoRepository documentoRepository;
 
-        private readonly IDbConnectionFactory context;
         public UnitOfWork(IDbConnectionFactory ctx)
         {
             this.context = ctx;
@@ -35,6 +36,7 @@ namespace cdi.rejufid.infrastructure
                 return expedienteRepository;
             }
         }
+
         public IEstadoRepository Estados
         {
             get
@@ -44,17 +46,18 @@ namespace cdi.rejufid.infrastructure
                 return estadoRepository;
             }
         }
+
         public IEstatusRepository Estatus
         {
             get
             {
-                if (this.estatusRepository== null)
+                if (this.estatusRepository == null)
                     this.estatusRepository = new EstatusRepository(this.context);
                 return estatusRepository;
             }
         }
-        public IMateriaRepository Materias
 
+        public IMateriaRepository Materias
         {
             get
             {
@@ -71,13 +74,12 @@ namespace cdi.rejufid.infrastructure
                 if (this.organoRepository == null)
                     this.organoRepository = new OrganoRepository(this.context);
                 return organoRepository;
-
             }
         }
 
         public IRoleRepository Roles
         {
-           get
+            get
             {
                 if (this.roleRepository == null)
                     this.roleRepository = new RoleRepository(this.context);
@@ -85,7 +87,17 @@ namespace cdi.rejufid.infrastructure
             }
         }
 
-        public ITipoAsuntoRepository TipoAsunto 
+        public IUsuarioRolRepository UsuariosRoles
+        {
+            get
+            {
+                if (this.usuarioRolRepository == null)
+                    this.usuarioRolRepository = new UsuarioRolRepository(this.context);
+                return usuarioRolRepository;
+            }
+        }
+
+        public ITipoAsuntoRepository TipoAsunto
         {
             get
             {
@@ -94,6 +106,7 @@ namespace cdi.rejufid.infrastructure
                 return tipoAsuntoRepository;
             }
         }
+
         public ITipoOrganoRepository TipoOrgano
         {
             get
@@ -103,6 +116,7 @@ namespace cdi.rejufid.infrastructure
                 return tipoOrganoRepository;
             }
         }
+
         public ITipoArchivoRepository TipoArchivo
         {
             get
@@ -113,11 +127,19 @@ namespace cdi.rejufid.infrastructure
             }
         }
 
+        public IDocumentoRepository Documentos
+        {
+            get
+            {
+                if (this.documentoRepository == null)
+                    this.documentoRepository = new DocumentoRepository(this.context);
+                return documentoRepository;
+            }
+        }
 
         public void Dispose()
         {
-            if (this.context != null)
-                this.context.Dispose();
+            this.context?.Dispose();
         }
     }
 }

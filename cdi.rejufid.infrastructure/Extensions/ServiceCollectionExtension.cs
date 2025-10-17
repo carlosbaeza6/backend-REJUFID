@@ -48,12 +48,16 @@ namespace cdi.rejufid.infrastructure.Extensions
             services.AddTransient<IRoleRepository, RoleRepository>();
             services.AddTransient<ITipoAsuntoRepository, TipoAsuntoRepository>();
             services.AddTransient<ITipoOrganoRepository, TipoOrganoRepository>();
+            // Servicios necesarios para Documentos
+            services.AddTransient<IDocumentoService, DocumentoService>();
+            services.AddScoped<IDocumentoRepository, DocumentoRepository>();
             services.AddTransient<ITipoArchivoRepository, TipoArchivoRepository>();
+            services.AddScoped<IFirmaDigitalService, FirmaDigitalService>();
 
-
-            // Servicios adicionales (comentados por ahora)
-            // services.AddTransient<IDocumentoService, DocumentoService>();
-            // services.AddTransient<ITipoArchivoService, TipoArchivoService>();
+            services.AddScoped<IUsuarioRolRepository, UsuarioRolRepository>();
+            services.AddScoped<IRoleRepository, RoleRepository>();
+            services.AddScoped<IUsuarioRolService, UsuarioRolService>();
+            services.AddScoped<ILoginService, LoginService>();
             // services.AddTransient<IUsuarioRolService, UsuarioRolService>();
             // services.AddTransient<IAccionUsuarioService, AccionUsuarioService>();
 

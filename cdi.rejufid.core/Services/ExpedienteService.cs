@@ -1,4 +1,9 @@
-﻿using AutoMapper;
+﻿using System;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using AutoMapper;
 using cdi.rejufid.core.DTOs;
 using cdi.rejufid.core.Entities;
 using cdi.rejufid.core.Interfaces.Repositories;
@@ -9,11 +14,13 @@ namespace cdi.rejufid.core.Services
     public class ExpedienteService : IExpedienteService
     {
         private readonly IExpedienteRepository expedienteRepository;
+        private readonly IDocumentoService documentoService;
         private readonly IMapper mapper;
 
-        public ExpedienteService(IExpedienteRepository expedienteRepository, IMapper mapper)
+        public ExpedienteService(IExpedienteRepository expedienteRepository, IDocumentoService documentoService, IMapper mapper)
         {
             this.expedienteRepository = expedienteRepository;
+            this.documentoService = documentoService;
             this.mapper = mapper;
         }
 
@@ -32,37 +39,74 @@ namespace cdi.rejufid.core.Services
         public async Task<int> CreateAsync(ExpedienteDTO dto)
         {
             var entity = mapper.Map<ExpedienteEntity>(dto);
-            return await expedienteRepository.AddAsync(entity);
-        }
-
-        public async Task<bool> UpdateAsync(int id, ExpedienteDTO dto)
-        {
-            var entity = mapper.Map<ExpedienteEntity>(dto);
-            return await expedienteRepository.UpdateAsync(entity);
+            return await expedienteRepository.CreateAsync(entity);
         }
 
         public async Task<bool> DeleteAsync(int id)
         {
+            await documentoService.DeleteByExpedienteAsync(id);
             return await expedienteRepository.DeleteAsync(id);
         }
 
         public async Task<IEnumerable<ExpedienteDetalleDTO>> GetFilteredAsync(
-            DateTime? fechaDesde,
-            DateTime? fechaHasta,
-            string? materia,
-            string? estado,
             string? tipoOrgano,
+            string? organo,
+            string? materia,
             string? palabraClave)
         {
-            var data = await expedienteRepository.FiltrarDetallesAsync(
-                fechaDesde, fechaHasta, materia, estado, tipoOrgano, palabraClave);
+            var data = await expedienteRepository.GetFilteredAsync(
+                tipoOrgano, organo, materia, palabraClave);
+
             return data;
         }
 
-        public async Task<IEnumerable<ExpedienteDetalleDTO>> GetUltimos100Async()
+        public async Task<IEnumerable<ExpedienteDetalleDTO>> GetLast100Async()
         {
-            var data = await expedienteRepository.FiltrarUltimos100Async();
+            var data = await expedienteRepository.GetLast100Async();
             return data;
+        }
+
+        public async Task<bool> DeleteDeepAsync(
+            int idExpediente,
+            string baseUploadsAbsolutePath,
+            CancellationToken ct = default)
+        {
+            var (existed, rutasRelativas) = await expedienteRepository.DeleteDeepAsync(idExpediente, ct);
+            if (!existed) return false;
+
+            foreach (var rel in rutasRelativas.Distinct())
+            {
+                var abs = ToAbsolutePath(baseUploadsAbsolutePath, rel);
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(abs) && File.Exists(abs))
+                        File.Delete(abs);
+                }
+                catch
+                {
+                    
+                }
+            }
+
+            return true;
+        }
+
+        private static string? ToAbsolutePath(string baseUploadsAbsolutePath, string? ruta)
+        {
+            if (string.IsNullOrWhiteSpace(ruta)) return null;
+
+            if (Path.IsPathRooted(ruta)) return ruta;
+
+            var trimmed = ruta.TrimStart('/', '\\')
+                              .Replace('/', Path.DirectorySeparatorChar)
+                              .Replace('\\', Path.DirectorySeparatorChar);
+
+            if (trimmed.StartsWith("archivos" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                trimmed = trimmed.Substring(("archivos" + Path.DirectorySeparatorChar).Length);
+            }
+
+            return Path.Combine(baseUploadsAbsolutePath, trimmed);
         }
     }
 }
